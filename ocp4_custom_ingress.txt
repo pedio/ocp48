@@ -1,0 +1,88 @@
+### *.apps.<cluster>.<subdomain>
+
+cat <<EOF > ocp4.cnf
+[ req ]
+default_bits       = 4096
+distinguished_name = req_distinguished_name
+req_extensions     = req_ext
+[ req_distinguished_name ]
+countryName                 = HK
+stateOrProvinceName         = HongKong
+localityName               = HongKong
+organizationName           = IT
+commonName                 =  *.apps.devops.cheers.local
+[ req_ext ]
+subjectAltName = @alt_names
+[alt_names]
+DNS.1   = *.apps.devops.cheers.local
+EOF
+
+
+openssl genrsa -out devopsocp.key 4096 
+
+openssl req -new -key devopsocp.key -out devopsocp.csr -subj "/" -config ocp4.cnf
+
+openssl x509 -req -days 13650 -in devopsocp.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out devopsocp.crt -extensions req_ext -extfile ocp4.cnf
+
+
+## trust the CA
+cp rootCA.pem /usr/local/share/ca-certificates
+update-ca-certificates
+
+## verify cert expiry date
+openssl s_client -showcerts -connect console-openshift-console.apps.devops.cheers.local:443 -servername console-openshift-console.apps.devops.cheers.local
+
+openssl x509 -in devopsocp.crt -text -noout -dates
+
+
+oc create configmap custom-ca --from-file=ca-bundle.crt=/root/certs/rootCA.pem -n openshift-config
+
+oc patch proxy/cluster --type=merge --patch='{"spec":{"trustedCA":{"name":"custom-ca"}}}'
+
+oc create secret tls devopsocp --cert=devopsocp.crt --key=devopsocp.key -n openshift-ingress
+
+oc patch ingresscontroller.operator default --type=merge -p '{"spec":{"defaultCertificate": {"name": "devopsocp"}}}' -n openshift-ingress-operator
+
+https://twitter.com/zairwolf/status/1196878125734486021
+
+Chrome NET::ERR_CERT_INVALID There's a secret passphrase built into the error page.  Just make sure the page is selected (click anywhere on the background), and type `thisisunsafe` #chrome
+
+==========================================================================================================
+
+### api.<cluster>.<subdomain>
+
+cat <<EOF > ocp4api.cnf
+[ req ]
+default_bits       = 4096
+distinguished_name = req_distinguished_name
+req_extensions     = req_ext
+[ req_distinguished_name ]
+countryName                 = HK
+stateOrProvinceName         = HongKong
+localityName               = HongKong
+organizationName           = IT
+commonName                 =  api.devops.cheers.local
+[ req_ext ]
+subjectAltName = @alt_names
+[alt_names]
+DNS.1   = api.devops.cheers.local
+EOF
+
+
+openssl genrsa -out devopsocpapi.key 4096 
+
+openssl req -new -key devopsocpapi.key -out devopsocpapi.csr -subj "/" -config ocp4api.cnf
+
+openssl x509 -req -days 13650 -in devopsocpapi.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out devopsocpapi.crt -extensions req_ext -extfile ocp4api.cnf
+
+
+oc create secret tls devopsocpapi --cert=/root/certs/devopsocpapi.crt --key=/root/certs/devopsocpapi.key -n openshift-config
+
+oc patch apiserver cluster --type=merge -p '{"spec":{"servingCerts": {"namedCertificates": [{"names": ["api.devops.cheers.local"], "servingCertificate": {"name": "devopsocpapi"}}]}}}' 
+
+oc get apiserver cluster -o yaml
+
+
+
+
+
