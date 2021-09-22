@@ -17,10 +17,9 @@ subjectAltName = @alt_names
 DNS.1   = *.apps.devops.cheers.local
 EOF
 
-
 openssl genrsa -out devopsocp.key 4096 
 
-openssl req -new -key devopsocp.key -out devopsocp.csr -subj "/" -config ocp4.cnf
+openssl req -new -key devopsocp.key -out devopsocp.csr -subj "/C=HK/ST=HongKong/L=HongKong/O=Global Security/OU=IT Department/CN=*.apps.devops.cheers.local" -config ocp4.cnf
 
 openssl x509 -req -days 13650 -in devopsocp.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out devopsocp.crt -extensions req_ext -extfile ocp4.cnf
 
@@ -71,7 +70,7 @@ EOF
 
 openssl genrsa -out devopsocpapi.key 4096 
 
-openssl req -new -key devopsocpapi.key -out devopsocpapi.csr -subj "/" -config ocp4api.cnf
+openssl req -new -key devopsocpapi.key -out devopsocpapi.csr --subj "/C=HK/ST=HongKong/L=HongKong/O=Global Security/OU=IT Department/CN=api.devops.cheers.local"  -config ocp4api.cnf
 
 openssl x509 -req -days 13650 -in devopsocpapi.csr -CA rootCA.pem -CAkey rootCA.key -CAcreateserial -out devopsocpapi.crt -extensions req_ext -extfile ocp4api.cnf
 
