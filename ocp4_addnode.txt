@@ -1,0 +1,12 @@
+cat <<EOF > /var/www/html/worker.sh
+sudo nmcli con del Wired\ connection\ 1
+sudo nmcli con add type ethernet con-name ens192 ifname ens192
+sudo nmcli con mod ens192 ipv4.method manual ipv4.addresses XXXXXXXX/XX ipv4.gateway XXXXXXXX ipv4.dns "XXXXXXXX,XXXXXXXX" ipv4.dns-search SEARCHDOMAIN
+sudo nmcli general hostname HOSTNAME
+sudo nmcli device reapply ens192
+sudo coreos-installer install --ignition-url=http://HTTPDSERVER/worker.ign /dev/sda --copy-network --insecure-ignition
+EOF
+
+
+chmod +x /var/www/html/*.sh
+sudo chown -R apache.apache /var/www/html
