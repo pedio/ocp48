@@ -1,0 +1,183 @@
+## Quay operator install
+
+oc new-project quay-enterprise
+
+## install quay operator 3.6
+
+cat <<EOF > config.yaml
+SERVER_HOSTNAME: quay.apps.devops.cheers.local
+FEATURE_USER_INITIALIZE: true
+BROWSER_API_CALLS_XHR_ONLY: false
+SUPER_USERS:
+- quayadmin
+FEATURE_USER_CREATION: false
+DISTRIBUTED_STORAGE_CONFIG:
+  default:
+    - RHOCSStorage
+    - access_key: 8DT29HdAyKzw2Iee0qSb
+      bucket_name: first.bucket
+      hostname: s3.openshift-storage.svc.cluster.local
+      is_secure: true
+      port: "443"
+      secret_key: 3JB/SJsH1MI0PCShnE8t91D7k06lPn334SxecD+h
+      storage_path: /datastorage/registry
+DISTRIBUTED_STORAGE_DEFAULT_LOCATIONS: []
+DISTRIBUTED_STORAGE_PREFERENCE:
+  - default
+EOF
+
+
+oc create secret generic --from-file config.yaml=./config.yaml config-bundle-secret --dry-run=client -oyaml | oc apply -f -
+
+cat << EOF | oc apply -f -
+apiVersion: quay.redhat.com/v1
+kind: QuayRegistry
+metadata:
+  name: quay-registry
+  namespace: quay-enterprise
+spec:
+  configBundleSecret: config-bundle-secret
+  components:
+    - kind: objectstorage
+      managed: false
+    - kind: postgres
+      managed: true      
+    - kind: redis
+      managed: true      
+    - kind: horizontalpodautoscaler
+      managed: true      
+    - kind: monitoring
+      managed: true      
+    - kind: clair
+      managed: true      
+    - kind: route
+      managed: true      
+    - kind: tls
+      managed: true      
+EOF
+
+
+
+cat << EOF | oc apply -f -
+apiVersion: quay.redhat.com/v1
+kind: QuayRegistry
+metadata:
+  name: quay-registry
+  namespace: quay-enterprise
+spec:
+  configBundleSecret: config-bundle-secret
+  components:
+    - kind: objectstorage
+      managed: false
+    - kind: postgres
+      managed: true      
+    - kind: redis
+      managed: true      
+    - kind: horizontalpodautoscaler
+      managed: true      
+    - kind: monitoring
+      managed: true      
+    - kind: clair
+      managed: true      
+    - kind: mirror
+      managed: true      
+    - kind: route
+      managed: true      
+    - kind: tls
+      managed: true      
+EOF
+
+
+[root@bastion quay]#  curl -X POST -k  https://quay-registry-quay-quay-enterprise.apps.devops.cheers.local/api/v1/user/initialize --header 'Content-Type: application/json' --data '{ "username": "quayadmin", "password":"quaypass123", "email": "quayadmin@example.com", "access_token": true}'
+{"access_token":"4JA508KJXY2NNN3VYXF485QFSDM1VAJ8M0LOFBJ3","email":"quayadmin@example.com","encrypted_password":"l0Yv0Bnt9jGbxZP6HO3KdcJlEMfmjsqS9HdMopiRW0EZ2/oxXXtvno2UgPMlDucb","username":"quayadmin"}
+
+
+curl -X GET -k -H "Authorization: Bearer 4JA508KJXY2NNN3VYXF485QFSDM1VAJ8M0LOFBJ3" https://quay-registry-quay-quay-enterprise.apps.devops.cheers.local/api/v1/superuser/users/
+
+
+curl -X POST -k --header 'Content-Type: application/json' -H "Authorization: Bearer 4JA508KJXY2NNN3VYXF485QFSDM1VAJ8M0LOFBJ3" https://quay-registry-quay-quay-enterprise.apps.devops.cheers.local/api/v1/organization/ --data '{"name": "testorg", "email": "test@example.com"}'
+
+curl -X GET -k --header 'Content-Type: application/json' -H "Authorization: Bearer 6B4QTRSTSD1HMIG915VPX7BMEZBVB9GPNY2FC2ED" https://quay-registry-quay-quay-enterprise.apps.devops.cheers.local/api/v1/organization/testorg
+
+
+
+
+# set proxy storage via quay in quayconfig editor UI
+
+
+#######################################################
+
+cat << EOF | oc apply -f -
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: quay-postgres-storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 50Gi
+  claimRef:
+    kind: PersistentVolumeClaim
+    namespace: quay-enterprise
+    name: quayecosystem-quay-postgresql
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  vsphereVolume:
+    fsType: ext4
+    volumePath: '[CTT_GAD_505F] OCP4_STG/ocp4-stg-quay-postgres.vmdk'
+EOF
+
+cat << EOF | oc apply -f -
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: clair-postgres-storage
+spec:
+  accessModes:
+  - ReadWriteOnce
+  capacity:
+    storage: 50Gi
+  claimRef:
+    kind: PersistentVolumeClaim
+    namespace: quay-enterprise
+    name: quayecosystem-clair-postgresql
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  vsphereVolume:
+    fsType: ext4
+    volumePath: '[CTT_GAD_505F] OCP4_STG/ocp4-stg-clair-postgres.vmdk'
+EOF
+
+
+
+
+Accessing Red Hat Quay (formerly Quay Enterprise) without a CoreOS login
+
+https://access.redhat.com/solutions/3533201
+
+podman login -u="redhat+quay" -p="O81WSHRSJR14UAZBK54GQHJS0P1V4CLWAJV1X2C4SD7KO59CQ9N3RE12612XU1HR" quay.io
+
+## create pull secret
+cat <<EOF | oc apply -f -
+apiVersion: v1
+kind: Secret
+metadata:
+  name: redhat-pull-secret
+data:
+  .dockerconfigjson: ewogICJhdXRocyI6IHsKICAgICJxdWF5LmlvIjogewogICAgICAiYXV0aCI6ICJjbVZrYUdGMEszRjFZWGs2VHpneFYxTklVbE5LVWpFMFZVRmFRa3MxTkVkUlNFcFRNRkF4VmpSRFRGZEJTbFl4V0RKRE5GTkVOMHRQTlRsRFVUbE9NMUpGTVRJMk1USllWVEZJVWc9PSIsCiAgICAgICJlbWFpbCI6ICIiCiAgICB9CiAgfQp9
+type: kubernetes.io/dockerconfigjson
+EOF
+
+## for disconnected env
+vi /root/.openshift/pull-secret-2.json  (append the below credentials)
+{
+  "auths":{
+    "quay.io": {
+        "auth": "cmVkaGF0K3F1YXk6TzgxV1NIUlNKUjE0VUFaQks1NEdRSEpTMFAxVjRDTFdBSlYxWDJDNFNEN0tPNTlDUTlOM1JFMTI2MTJYVTFIUg==",
+        "email": ""
+    }
+  }
+}	
+
+
